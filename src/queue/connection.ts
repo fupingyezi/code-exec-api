@@ -9,3 +9,9 @@
  *     （BullMQ 的 Queue/Worker 可共享同一 connection 对象）
  *   - 地址来自 config.ts，不在本文件硬编码
  */
+import { Redis } from "ioredis";
+import { config } from "../config.js";
+
+export const redisConnection = new Redis(config.redis.url, {
+  maxRetriesPerRequest: null,
+});
