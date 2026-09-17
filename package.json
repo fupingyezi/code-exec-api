@@ -1,0 +1,32 @@
+{
+  "name": "code-exec-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "在线代码执行判题服务：Express API + BullMQ + Docker 沙箱",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "sandbox:python": "docker build -f docker/sandbox-python.Dockerfile -t sandbox-python:latest ."
+  },
+  "dependencies": {
+    "bullmq": "^5.0.0",
+    "dockerode": "^4.0.0",
+    "express": "^4.19.0",
+    "ioredis": "^5.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.0",
+    "@types/express": "^4.17.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
