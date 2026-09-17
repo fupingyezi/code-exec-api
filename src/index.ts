@@ -5,16 +5,17 @@
  */
 import { startServer } from './api/server.js';
 import { startWorker } from './queue/worker.js';
+import { logger } from './logger.js';
 
 const worker = await startWorker();
 const server = await startServer();
 
 // 优雅退出：先停 Worker（等当前任务收尾），再关 HTTP
 async function shutdown(signal: string): Promise<void> {
-  console.log(`收到 ${signal}，开始优雅退出`);
+  logger.info({ signal }, '开始优雅退出');
   await worker.close();
   server.close(() => {
-    console.log('已退出');
+    logger.info('已退出');
     process.exit(0);
   });
   setTimeout(() => process.exit(1), 5000).unref();   // 兜底：5 秒内没退完就强制退出

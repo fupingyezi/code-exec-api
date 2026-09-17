@@ -13,6 +13,7 @@ import { executeInSandbox } from '../runner/execute.js';
 import { judgeRun } from '../runner/verdict.js';
 import { setJobStatus, saveJobResult, type JobResult } from '../store/jobStore.js';
 import { limits, jobsBaseDir, queueName, CONTAINER_DIR } from '../config.js';
+import { logger } from '../logger.js';
 
 export async function startWorker(): Promise<Worker<JobData>> {
   await mkdir(jobsBaseDir, { recursive: true });
@@ -78,6 +79,7 @@ export async function startWorker(): Promise<Worker<JobData>> {
         return result;
       } catch (err) {
         // Worker 自身异常 → failed{IE}（文档 §4.4 错误码表 / §9.2 状态机），与用户代码无关
+        logger.error({ err, jobId: job.id }, 'Worker 异常，任务记为 IE');
         const result: JobResult = {
           jobId: job.id!, status: 'failed', verdict: 'IE',
           stdout: '', stderr: err instanceof Error ? err.message : String(err),

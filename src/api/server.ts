@@ -8,6 +8,7 @@ import type http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiPort } from '../config.js';
+import { logger } from '../logger.js';
 import { router } from './routes.js';
 
 export async function startServer(): Promise<http.Server> {
@@ -33,12 +34,12 @@ export async function startServer(): Promise<http.Server> {
 
   // 统一错误处理（必须最后装配）
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('API 错误:', err);
+    logger.error({ err }, 'API 错误');
     res.status(500).json({ error: { code: 'INTERNAL', message: '内部错误' } });
   });
 
   const server = app.listen(apiPort, () => {
-    console.log(`code-exec-api 已启动: http://localhost:${apiPort}`);
+    logger.info({ port: apiPort }, `code-exec-api 已启动: http://localhost:${apiPort}`);
   });
   return server;
 }
