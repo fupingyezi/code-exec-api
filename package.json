@@ -9,7 +9,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "sandbox:python": "docker build -f docker/sandbox-python.Dockerfile -t sandbox-python:latest ."
+    "sandbox:python": "docker build -f docker/sandbox-python.Dockerfile -t sandbox-python:latest .",
+    "sandbox:node": "docker build -f docker/sandbox-node.Dockerfile -t sandbox-node:latest .",
+    "sandbox:cpp": "docker build -f docker/sandbox-cpp.Dockerfile -t sandbox-cpp:latest ."
   },
   "dependencies": {
     "bullmq": "^5.0.0",

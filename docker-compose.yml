@@ -3,14 +3,11 @@
 services:
   redis:
     image: redis:7-alpine
+    # 判题队列不需要持久化（文档附录 C）
+    command: redis-server --save '' --appendonly no
     ports:
       # 宿主 6379 被其他项目占用，默认改挂 6380；可用 REDIS_HOST_PORT 覆盖
       - "${REDIS_HOST_PORT:-6380}:6379"
-    # TODO: 持久化卷、密码等，需与 src/config.ts 中的 REDIS_URL 对齐
-    volumes:
-      - redis-data:/data
 
-  # TODO(阶段二): 如需容器化部署 API / Worker 进程，在此补充 service
-
-volumes:
-  redis-data:
+  # TODO(阶段二): 按文档附录 C 补充 api/worker service
+  # 注意：挂载 /var/run/docker.sock 等价于 root，生产必须拆机部署

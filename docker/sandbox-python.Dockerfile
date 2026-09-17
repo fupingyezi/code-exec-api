@@ -1,17 +1,17 @@
-# 沙箱镜像：Python 执行环境
-# 安全要求同 sandbox-node.Dockerfile：
-#   - 非 root 用户运行
-#   - 不暴露网络
-FROM python:3.12-alpine
+# 沙箱镜像：Python 执行环境（文档 §6.3）
+FROM python:3.11-alpine
 
-# 创建非 root 用户：用户代码以最小权限运行
-RUN adduser -D -u 1000 sandbox \
-    && mkdir -p /sandbox \
-    && chown sandbox:sandbox /sandbox
+# 基础镜像已自带 nobody(65534)，直接以该身份运行。
+# （文档原版 addgroup/adduser 会因 gid 65534 已被 nobody 组占用而构建失败，
+#   实测修正：删掉创建用户的步骤）
 
-WORKDIR /sandbox
-USER sandbox
+# 运行镜像不留包管理器：pip 是攻击者的工具（§6.3 纪律2）
+RUN pip uninstall -y pip 2>/dev/null || true
 
-# -I：隔离模式，忽略 PYTHONPATH / 用户级 site-packages，防止环境注入
-# -u：关闭 stdout 缓冲，输出实时到达采集端（对后续 capture.ts 很重要）
-ENTRYPOINT ["python", "-I", "-u"]
+WORKDIR /workspace
+
+# 双保险：镜像层声明非 root，HostConfig 里再声明一次
+USER 65534:65534
+
+# 清空 ENTRYPOINT：命令完全由 HostConfig.Cmd 决定（python3 -I main.py）
+ENTRYPOINT []

@@ -1,17 +1,15 @@
 /**
  * @module runner/verdict
- * 结果判定：将执行结果元数据归类为终态。
+ * 运行阶段结果判定（文档 §8）。
  *
- * 终态枚举：
- *   AC  Accepted      正常退出（退出码 0）
- *   CE  Compile Error 编译阶段失败（编译型语言）
- *   RE  Runtime Error 运行期异常退出（非零退出码 / 被信号杀死）
- *   TLE Time Limit    超时（容器内限时命中或兜底超时）
- *   MLE Memory Limit  内存超限（OOMKilled）
- *   OLE Output Limit  输出超限（capture.ts 截断标记）
+ * Verdict 类型：'AC' | 'RE' | 'TLE' | 'MLE' | 'OLE' | 'IE'
+ * CE 不在这里判：Worker 在编译分支直接返回（文档 §5.1 ③）。
  *
- * 职责：
- *   - judge(执行结果元数据) → Verdict，纯函数、无副作用，便于单测
- *   - 判定优先级需明确（如 OOMKilled 与超时同时出现时取哪个）
- *   - 供 worker.ts 写终态、routes.ts 判定 SSE 关闭条件
+ * judgeRun 判定优先级（文档 §8.1，顺序敏感）：
+ *   1. truncated        → OLE（优先级高于 TLE，否则掩盖真实死因）
+ *   2. oomKilled        → MLE
+ *   3. timedOut || 137  → TLE
+ *   4. 139 / 134        → RE
+ *   5. 其他非零退出码    → IE（无法解释的状态报「我不知道」）
+ *   6. exitCode 0       → AC（仅表示跑完，不代表答案正确）
  */

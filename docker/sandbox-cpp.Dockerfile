@@ -1,7 +1,10 @@
 # 沙箱镜像：C/C++ 编译 + 执行环境（编译与执行同镜像）
-# 安全要求同 sandbox-node.Dockerfile，额外注意：
-#   - 编译产物写入可执行目录（tmpfs），运行时文件系统只读
-# TODO:
-#   FROM gcc:14 或 alpine + g++
-#   - 创建受限用户与工作目录 /sandbox
-#   - 设置默认 CMD / ENTRYPOINT（配合编译/运行两阶段命令）
+# 编译阶段需要 tmpfs 可执行（dockerOptions 的 needExec），运行阶段不需要
+FROM gcc:12
+
+# 基础镜像已自带 nogroup/nobody(65534)，直接以该身份运行。
+# （文档原版 groupadd/useradd 会因 GID 65534 已被占用而构建失败，实测修正）
+
+WORKDIR /workspace
+USER 65534:65534
+ENTRYPOINT []
