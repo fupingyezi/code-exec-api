@@ -44,20 +44,18 @@ SANDBOX_POOL=1 npm test          # 池化模式：额外跑容器池 8 条（§1
 
 > ⚠ 本机是 colima 环境：colima(vz) 只共享 `$HOME`，宿主的 `/tmp` 与 `/var/run/docker.sock` 都不可用，容器化部署在本机跑不通，请继续用 `npm run dev`。此编排面向 Linux / Docker Desktop。
 
-## M5 进阶（gVisor，文档 §12）
+## M5 进阶（gVisor，文档 §12）——已完成
 
-1. 安装 runsc（本机尚未安装，需要 sudo）：
-   ```bash
-   ARCH=$(uname -m)
-   URL="https://storage.googleapis.com/gvisor/releases/release/latest/${ARCH}"
-   wget "${URL}/runsc" "${URL}/runsc.sha512"
-   sha512sum -c runsc.sha512
-   chmod a+rx runsc && sudo mv runsc /usr/local/bin/
-   sudo runsc install && sudo systemctl restart docker   # colima 环境需在 VM 内配置
-   docker run --rm --runtime=runsc alpine dmesg | head -1
-   ```
-2. 切换（不改一行代码）：`SANDBOX_RUNTIME=runsc npm run dev`
-3. 同一套测试在两种 runtime 下各跑一遍，按文档 §12.3 记录对比表：用例 × 两种 runtime ×（启动耗时 / 执行耗时 / verdict），写进 `docs/`。
+runsc release-20260914.0 已装入 colima VM 并注册为 Docker runtime。切换（不改一行代码）：
+
+```bash
+SANDBOX_RUNTIME=runsc npm run dev                              # gVisor + 冷路径（cpp 不可用，见下）
+SANDBOX_RUNTIME=runsc SANDBOX_POOL=1 npm run dev               # gVisor 的正确姿势（全语言可用）
+SANDBOX_RUNTIME=runsc npm test                                 # 12/12 全绿
+SANDBOX_RUNTIME=runsc SANDBOX_POOL=1 npm test                  # 20/20 全绿
+```
+
+对比实验结论见 [docs/gvisor-对比.md](docs/gvisor-对比.md)：本机冷启动实测 ~5ms（非文档估算的 500ms，池化在本机是负优化）；cpp 冷路径在 runsc 下编译失败（gofer 对 virtiofs 绑定挂载 reopen 拒绝）；MLE 判定在 runsc 下降级为 TLE（无 OOMKilled 标志）。卸载/回滚见 VM 内 `/etc/docker/daemon.json.bak-before-runsc` 与文档 §12.2。
 
 ## Commit → 文档章节对照
 

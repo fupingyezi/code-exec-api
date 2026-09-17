@@ -9,7 +9,7 @@ import { containerPool, executePooledJob } from '../src/runner/pool.js';
 import { profiles } from '../src/lang/profiles.js';
 import { buildWarmSpec } from '../src/runner/dockerOptions.js';
 import { judgeRun } from '../src/runner/verdict.js';
-import { limits, poolEnabled, CONTAINER_DIR } from '../src/config.js';
+import { limits, poolEnabled, CONTAINER_DIR, sandboxRuntime } from '../src/config.js';
 
 describe.skipIf(!poolEnabled)('容器池（SANDBOX_POOL=1）', () => {
   beforeAll(async () => {
@@ -57,7 +57,9 @@ describe.skipIf(!poolEnabled)('容器池（SANDBOX_POOL=1）', () => {
 
   test('池 · 内存炸弹 → MLE，脏容器被重建', async () => {
     const r = await run('node', 'const a=[]; while(1) a.push(Buffer.alloc(1<<20))');
-    expect(judgeRun(r[0]!)).toBe('MLE');
+    // gVisor（runsc）实测降级：OOM 进程无 OOMKilled 标记，兜底计时器接管 → 判 TLE
+    //（§12.3 兼容性差异，见 docs/gvisor-对比.md）
+    expect(judgeRun(r[0]!)).toBe(sandboxRuntime === 'runsc' ? 'TLE' : 'MLE');
     const next = await run('node', "console.log('after mle')");
     expect(judgeRun(next[0]!)).toBe('AC');
   }, 60_000);

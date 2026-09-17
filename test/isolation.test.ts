@@ -13,7 +13,7 @@ import Docker from 'dockerode';
 import { profiles } from '../src/lang/profiles.js';
 import { executeInSandbox } from '../src/runner/execute.js';
 import { judgeRun } from '../src/runner/verdict.js';
-import { limits, jobsBaseDir, dockerSocketPath, poolEnabled } from '../src/config.js';
+import { limits, jobsBaseDir, dockerSocketPath, poolEnabled, sandboxRuntime } from '../src/config.js';
 
 /** 直接走执行器（不经队列），隔离测试关注的是沙箱参数本身 */
 async function runInSandbox(lang: 'node' | 'python' | 'cpp', source: string, stdin = '') {
@@ -68,7 +68,9 @@ test('隔离 · fork 炸弹被 PidsLimit 拦住', async () => {
 // §11.2 用例 5：内存炸弹 → MLE（OOMKilled 标志）
 test('隔离 · 内存炸弹 → MLE', async () => {
   const r = await runInSandbox('node', 'const a=[]; while(1) a.push(Buffer.alloc(1<<20))');
-  expect(judgeRun(r)).toBe('MLE');
+  // gVisor（runsc）实测降级：不设置容器 OOMKilled 标志，兜底计时器接管 → 判 TLE
+  //（§12.3 兼容性差异，见 docs/gvisor-对比.md，非 bug）
+  expect(judgeRun(r)).toBe(sandboxRuntime === 'runsc' ? 'TLE' : 'MLE');
 }, 30_000);
 
 // §11.2 用例 6：死循环 → TLE（宿主兜底计时器，wallMs 略大于 5000）
