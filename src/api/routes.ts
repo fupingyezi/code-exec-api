@@ -45,6 +45,11 @@ queueEvents.on('progress', ({ jobId, data }) => broadcast(jobId, 'stdout', data)
 queueEvents.on('completed', ({ jobId }) => void finishSse(jobId));
 queueEvents.on('failed', ({ jobId }) => void finishSse(jobId));
 
+/** 测试与优雅退出用：关闭事件订阅连接 */
+export async function closeApiResources(): Promise<void> {
+  await queueEvents.close();
+}
+
 // —— 限流（文档 §9.1 rate:{callerId} / §4.4 429）——
 // 文档 §2 说令牌桶；此处用固定窗口计数近似（INCR + 首次设 TTL），学习项目足够
 async function checkRateLimit(callerId: string): Promise<boolean> {
