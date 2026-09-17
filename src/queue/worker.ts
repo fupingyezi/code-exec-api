@@ -57,13 +57,14 @@ export async function startWorker(): Promise<Worker<JobData>> {
           }
         }
 
-        // 运行轮
+        // 运行轮（输出分块经 BullMQ progress 事件推给 SSE，文档 §4.3）
         const run = await executeInSandbox(
           { hostDir: dir, needExec: false },
           profile,
           job.data.stdin,
           undefined,
           job.data.wallMs ?? limits.wallMs,
+          (kind, text) => void job.updateProgress({ kind, text }),
         );
 
         const result: JobResult = {

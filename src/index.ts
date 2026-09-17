@@ -1,13 +1,23 @@
 /**
  * @module index
- * 进程入口：负责装配与启动。
- *
- * 职责：
- *   1. 读取 config.ts 中的配置
- *   2. 启动 HTTP API（src/api/server.ts）
- *   3. 启动队列 Worker（src/queue/worker.ts）
- *
- * 约束：
- *   - 本文件只做「启动」，不承载业务逻辑
- *   - 优雅退出：SIGINT/SIGTERM 时先停 API，再停 Worker（BullMQ worker.close()）
+ * 进程入口（文档 §3）：启动 Worker + HTTP API。
+ * 本文件只做「启动」，不承载业务逻辑。
  */
+import { startServer } from './api/server.js';
+import { startWorker } from './queue/worker.js';
+
+const worker = await startWorker();
+const server = await startServer();
+
+// 优雅退出：先停 Worker（等当前任务收尾），再关 HTTP
+async function shutdown(signal: string): Promise<void> {
+  console.log(`收到 ${signal}，开始优雅退出`);
+  await worker.close();
+  server.close(() => {
+    console.log('已退出');
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 5000).unref();   // 兜底：5 秒内没退完就强制退出
+}
+process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));

@@ -14,15 +14,20 @@ export interface Capture {
   truncated(): boolean;
 }
 
-export function createCapture(budget: number): Capture {
+export function createCapture(
+  budget: number,
+  /** 每个原始块到达时的回调，SSE 分块输出用（文档 §4.3；§7.3 原版无此参数） */
+  onChunk?: (kind: 'stdout' | 'stderr', text: string) => void,
+): Capture {
   const outChunks: Buffer[] = [];
   const errChunks: Buffer[] = [];
   let used = 0;
   let cut = false;
 
-  const sink = (chunks: Buffer[]) =>
+  const sink = (chunks: Buffer[], kind: 'stdout' | 'stderr') =>
     new Writable({
       write(chunk: Buffer, _enc, cb) {
+        onChunk?.(kind, chunk.toString('utf8'));
         if (used < budget) {
           const slice = chunk.subarray(0, budget - used);
           chunks.push(slice);
@@ -37,8 +42,8 @@ export function createCapture(budget: number): Capture {
     });
 
   return {
-    stdout: sink(outChunks),
-    stderr: sink(errChunks),
+    stdout: sink(outChunks, 'stdout'),
+    stderr: sink(errChunks, 'stderr'),
     out: () => Buffer.concat(outChunks).toString('utf8'),
     err: () => Buffer.concat(errChunks).toString('utf8'),
     truncated: () => cut,

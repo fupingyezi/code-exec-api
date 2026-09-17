@@ -27,13 +27,15 @@ export async function executeInSandbox(
   stdin: string,
   cmdOverride?: string[],
   wallMs: number = limits.wallMs,
+  /** 输出分块回调（SSE 流式推送用，文档 §4.3） */
+  onOutput?: (kind: 'stdout' | 'stderr', text: string) => void,
 ): Promise<ExecResult> {
   const started = Date.now();
   const container = await docker.createContainer(
     buildContainerSpec(target, profile, cmdOverride),
   );
 
-  const capture = createCapture(limits.outputBytes);
+  const capture = createCapture(limits.outputBytes, onOutput);
 
   try {
     // ★ 顺序：先 attach，再 start（文档 §5 图2 注）。
