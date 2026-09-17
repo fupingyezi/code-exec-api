@@ -10,7 +10,8 @@ import { limits } from '../config.js';
 export const runRequestSchema = z.object({
   lang: z.enum(['node', 'python', 'cpp']),
   // 源码长度上限 128 KiB（§4.1）。注：z.string().max 按字符数，ASCII 下与字节等价
-  source: z.string().min(1).max(limits.sourceBytes),
+  // 池化路径源码会进入 exec argv（node -e / python3 -c），NUL 字节会使 execve 失败
+  source: z.string().min(1).max(limits.sourceBytes).refine((s) => !s.includes('\0'), '源码不能包含 NUL 字节'),
   // stdin 上限 1 MiB（§4.1）
   stdin: z.string().max(limits.stdinBytes).default(''),
   limits: z

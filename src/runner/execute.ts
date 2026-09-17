@@ -4,6 +4,7 @@
  */
 import Docker from 'dockerode';
 import { limits, dockerSocketPath } from '../config.js';
+import { logger } from '../logger.js';
 import { buildContainerSpec, type RunTarget } from './dockerOptions.js';
 import { createCapture } from './capture.js';
 import type { LangProfile } from '../lang/profiles.js';
@@ -84,7 +85,21 @@ export async function executeInSandbox(
     };
   } finally {
     // 对文档 §7.2 的一处补强：异常路径也强制回收容器，避免泄漏
-    // （文档原版 remove 在正常路径末尾，attach/start 抛错时容器会残留）
-    await container.remove({ force: true }).catch(() => {});
+    // （文档原版 remove 在正常路径末尾，attach/start 抛错时容器会残留）。
+    // 移除失败重试并记日志——静默吞掉会让容器无声泄漏（隔离自测用例 10 会抓住它）
+    let removed = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await container.remove({ force: true });
+        removed = true;
+        break;
+      } catch (err) {
+        logger.warn({ err, attempt }, '容器回收失败，重试');
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+    if (!removed) {
+      logger.error({ containerId: container.id }, '容器回收 5 次失败，容器已泄漏');
+    }
   }
 }

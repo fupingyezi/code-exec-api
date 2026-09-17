@@ -60,3 +60,9 @@ export const dockerSocketPath = detectDockerSocket();
 // 宿主的 /var/folders（os.tmpdir()）与 /tmp 会被虚拟机内同名路径遮蔽，
 // bind mount 后容器里看不到源码（实测踩坑）。故基址放 home 下。
 export const jobsBaseDir = process.env.JOBS_DIR ?? path.join(homedir(), '.code-exec', 'jobs');
+
+// —— 容器池（文档 §10，阶段四）——
+// 默认关：冷路径（每任务一个容器）是语义最干净的兜底（§10.3 的退回原则）
+export const poolEnabled = process.env.SANDBOX_POOL === '1';
+// 每种镜像的预热容器数（文档未给数值，设计值；与 workerConcurrency 对齐后压测调整）
+export const poolSize = Number(process.env.POOL_SIZE ?? 4);

@@ -13,7 +13,7 @@ import Docker from 'dockerode';
 import { profiles } from '../src/lang/profiles.js';
 import { executeInSandbox } from '../src/runner/execute.js';
 import { judgeRun } from '../src/runner/verdict.js';
-import { limits, jobsBaseDir, dockerSocketPath } from '../src/config.js';
+import { limits, jobsBaseDir, dockerSocketPath, poolEnabled } from '../src/config.js';
 
 /** 直接走执行器（不经队列），隔离测试关注的是沙箱参数本身 */
 async function runInSandbox(lang: 'node' | 'python' | 'cpp', source: string, stdin = '') {
@@ -50,6 +50,12 @@ test('隔离 · 宿主敏感文件不可读', async () => {
   expect(r.stdout + r.stderr).toMatch(/EACCES|ENOENT/);
 }, 30_000);
 
+// /tmp tmpfs 必须可写（mode=1777 实测修正的回归用例：Docker 默认 mode 755 会让 nobody 写不进）
+test('隔离 · /tmp 对用户代码可写', async () => {
+  const r = await runInSandbox('node', "require('fs').writeFileSync('/tmp/x.txt','ok'); console.log('writable')");
+  expect(r.stdout).toContain('writable');
+}, 30_000);
+
 // §11.2 用例 4：fork 炸弹被 PidsLimit 拦住
 test('隔离 · fork 炸弹被 PidsLimit 拦住', async () => {
   const r = await runInSandbox(
@@ -80,10 +86,16 @@ test('隔离 · 输出轰炸 → OLE', async () => {
   expect(r.stdout.length).toBeLessThanOrEqual(limits.outputBytes);
 }, 30_000);
 
-// §11.2 用例 10：残留检查——所有沙箱容器必须被回收
+// §11.2 用例 10：残留检查——沙箱容器必须被回收。
+// 池化模式下常驻容器（running 的 sleep infinity）是合法存在（§11.2「或等于池大小」），
+// 泄漏 = 非池化的 sandbox-* 容器（冷路径残留 / 池容器被杀死后没销毁）
 afterAll(async () => {
   const docker = new Docker({ socketPath: dockerSocketPath });
   const list = await docker.listContainers({ all: true });
-  const leaks = list.filter((c) => (c.Image ?? '').startsWith('sandbox-'));
+  const leaks = list.filter((c) => {
+    if (!(c.Image ?? '').startsWith('sandbox-')) return false;
+    const isPoolWarm = c.Command === 'sleep infinity' && c.State === 'running';
+    return poolEnabled ? !isPoolWarm : true;
+  });
   expect(leaks).toEqual([]);
 });
