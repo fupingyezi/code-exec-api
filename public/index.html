@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>code-exec-api · 代码执行沙箱</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --border: #2c313a;
+    --text: #d8dce3; --dim: #8b93a1; --accent: #4f8cff;
+    --ok: #3fbf7f; --bad: #e25555; --warn: #e0a23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Segoe UI", sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 14px 22px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 14px;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--dim); font-size: 12px; }
+  main { flex: 1; display: flex; gap: 14px; padding: 14px 22px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .col.left { flex: 1.2; }
+  .col.right { flex: 1; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; display: flex; flex-direction: column;
+    gap: 8px; min-height: 0;
+  }
+  .panel label { font-size: 12px; color: var(--dim); }
+  textarea {
+    width: 100%; background: #14161a; color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px;
+    line-height: 1.5; padding: 10px; resize: none;
+  }
+  textarea#source { flex: 1; min-height: 200px; }
+  textarea#stdin { height: 64px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  select, input[type="number"] {
+    background: #14161a; color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+    font-size: 13px;
+  }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 8px 20px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .statusline { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+  .badge {
+    padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: #333a45; color: var(--text);
+  }
+  .badge.queued { background: #3a4356; }
+  .badge.running { background: #4a4a22; color: #ffe08a; }
+  .badge.AC  { background: #17382a; color: var(--ok); }
+  .badge.TLE { background: #3d2f14; color: var(--warn); }
+  .badge.MLE, .badge.OLE { background: #33213d; color: #c78aff; }
+  .badge.RE  { background: #3d1a1a; color: var(--bad); }
+  .badge.CE  { background: #3d3314; color: #ffd76a; }
+  .badge.IE  { background: #333a45; color: var(--dim); }
+  #output {
+    flex: 1; overflow: auto; background: #14161a;
+    border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px;
+    white-space: pre-wrap; word-break: break-all; margin: 0;
+  }
+  #output .err { color: var(--bad); }
+  #meta { font-size: 12px; color: var(--dim); min-height: 16px; }
+  #error { color: var(--bad); font-size: 13px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>code-exec-api</h1>
+  <span class="sub">沙箱执行测试页 · 提交的代码在隔离容器中运行（文档 §11 威胁模型）</span>
+</header>
+
+<main>
+  <div class="col left">
+    <div class="panel" style="flex:1">
+      <div class="toolbar">
+        <label>语言</label>
+        <select id="lang">
+          <option value="node">Node.js</option>
+          <option value="python">Python</option>
+          <option value="cpp">C++ (g++ 17)</option>
+        </select>
+        <label>超时(ms)</label>
+        <input id="wallMs" type="number" min="500" max="15000" placeholder="默认 5000" style="width:110px" />
+        <button id="runBtn">▶ 运行</button>
+      </div>
+      <label>源代码（source ≤ 128 KiB）</label>
+      <textarea id="source" spellcheck="false">console.log('hello node')</textarea>
+      <label>标准输入 stdin（≤ 1 MiB）</label>
+      <textarea id="stdin" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="col right">
+    <div class="panel" style="flex:1">
+      <div class="statusline">
+        <span class="badge" id="badge">空闲</span>
+        <span id="jobline" style="color:var(--dim)"></span>
+      </div>
+      <pre id="output"></pre>
+      <div id="meta"></div>
+      <div id="error"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const samples = {
+  node: "console.log('hello node')",
+  python: "print('hello python')",
+  cpp: '#include <iostream>\nint main(){ std::cout << "hello cpp" << std::endl; return 0; }',
+};
+
+$('lang').addEventListener('change', () => { $('source').value = samples[$('lang').value]; });
+
+// ★ 用户代码的输出一律用 textContent 渲染，绝不用 innerHTML（防 XSS）
+function appendOut(kind, text) {
+  const span = document.createElement('span');
+  if (kind === 'stderr') span.className = 'err';
+  span.textContent = text;
+  $('output').appendChild(span);
+}
+
+function setBadge(text, cls) {
+  const b = $('badge');
+  b.textContent = text;
+  b.className = 'badge' + (cls ? ' ' + cls : '');
+}
+
+$('runBtn').addEventListener('click', async () => {
+  const btn = $('runBtn');
+  $('output').textContent = '';
+  $('meta').textContent = '';
+  $('error').textContent = '';
+  $('jobline').textContent = '';
+  btn.disabled = true;
+  setBadge('排队中', 'queued');
+
+  const body = { lang: $('lang').value, source: $('source').value, stdin: $('stdin').value };
+  const wall = parseInt($('wallMs').value, 10);
+  if (wall >= 500 && wall <= 15000) body.limits = { wallMs: wall };
+
+  try {
+    // 1) 提交
+    const resp = await fetch('/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      $('error').textContent = `提交失败 [${resp.status}] ${data.error.code}: ${data.error.message}`;
+      setBadge('失败', 'IE');
+      btn.disabled = false;
+      return;
+    }
+
+    // 2) SSE 订阅事件流
+    $('jobline').textContent = `jobId: ${data.jobId}`;
+    const es = new EventSource(data.eventsUrl);
+
+    es.addEventListener('status', (e) => {
+      const { status } = JSON.parse(e.data);
+      if (status === 'running') setBadge('运行中', 'running');
+    });
+
+    es.addEventListener('stdout', (e) => {
+      const { kind, text } = JSON.parse(e.data);
+      appendOut(kind, text);
+    });
+
+    es.addEventListener('done', (e) => {
+      const r = JSON.parse(e.data);
+      setBadge(r.verdict, r.verdict);
+      const parts = [`wallMs=${r.wallMs}`, `exitCode=${r.exitCode}`];
+      $('meta').textContent = parts.join(' · ');
+      es.close();
+      btn.disabled = false;
+    });
+
+    es.onerror = () => {
+      // 流断开且服务端未发 done：回退到轮询读一次终态
+      fetch(data.pollUrl)
+        .then((r) => r.json())
+        .then((r) => {
+          if (!r.verdict) return;
+          setBadge(r.verdict, r.verdict);
+          $('meta').textContent = `wallMs=${r.wallMs} · exitCode=${r.exitCode} · truncated=${r.truncated} · oomKilled=${r.oomKilled}`;
+          if (r.stdout) appendOut('stdout', r.stdout);
+          if (r.stderr) appendOut('stderr', r.stderr);
+        })
+        .finally(() => { es.close(); btn.disabled = false; });
+    };
+  } catch (err) {
+    $('error').textContent = '网络错误: ' + err.message;
+    setBadge('失败', 'IE');
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
