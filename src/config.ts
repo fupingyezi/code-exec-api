@@ -30,3 +30,6 @@ export const limits = {
 export const apiPort = Number(process.env.API_PORT ?? 3000);
 export const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6380';
 export const queueName = 'code-exec';   // 对应 BullMQ 前缀 bull:code-exec:*
+// 沙箱隔离后端：改成 runsc 即切换 gVisor（文档 §12.2）。
+// 与文档 §6.2 的细微偏差：env 读取集中在本文件而不是 dockerOptions.ts（§3 常量集中原则）
+export const sandboxRuntime = process.env.SANDBOX_RUNTIME ?? 'runc';
