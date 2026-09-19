@@ -1,6 +1,6 @@
 /**
  * @module queue/queue
- * 队列定义与默认 job options（文档 §4.1/§9.1）。
+ * 队列定义与默认 job options。
  */
 import { Queue } from 'bullmq';
 import { redisConnection } from './connection.js';

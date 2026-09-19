@@ -1,6 +1,6 @@
 /**
  * @module test/api
- * API 层测试（文档 §4 契约）：真实 redis + 真实 server，不起 Worker，
+ * API 层测试：真实 redis + 真实 server，不起 Worker，
  * 只验证「校验 → 入队 → 状态查询」这条同步路径。
  */
 import { test, expect, beforeAll, afterAll } from 'vitest';

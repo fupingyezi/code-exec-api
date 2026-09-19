@@ -1,6 +1,6 @@
 /**
  * @module api/server
- * Express 实例与中间件装配（文档 §3）。
+ * Express 实例与中间件装配。
  * 中间件顺序是安全性的一部分：json 解析在前，路由居中，错误处理最后。
  */
 import express from 'express';

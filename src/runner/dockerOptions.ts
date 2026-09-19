@@ -1,8 +1,8 @@
 /**
  * @module runner/dockerOptions
- * ★ 沙箱参数构造——安全核心全在这个文件（文档 §6.2）。
- * 唯一允许出现 docker 安全参数的地方；任何一行改动都必须同步更新
- * test/isolation.test.ts 的快照。
+ * ★ 沙箱参数构造——安全核心全在这个文件。
+ * 唯一允许出现 docker 安全参数的地方；任何改动都会被
+ * test/isolation.test.ts 的用例挡住。
  */
 import type Dockerode from 'dockerode';
 import { limits, CONTAINER_DIR, sandboxRuntime } from '../config.js';
@@ -33,7 +33,6 @@ function baseSpec(profile: LangProfile, cmd: string[]): Dockerode.ContainerCreat
     HostConfig: {
       // —— 权限 ——
       // 注：User 只在 ContainerCreateOptions 顶层生效，HostConfig 没有该字段
-      //（文档 §6.2 的「双保险」写法实测编译不过，已修正）
       CapDrop: ['ALL'],
       SecurityOpt: ['no-new-privileges:true'],
 
@@ -51,7 +50,7 @@ function baseSpec(profile: LangProfile, cmd: string[]): Dockerode.ContainerCreat
       // —— 网络 ——
       NetworkMode: 'none',
 
-      // —— 隔离后端：改这一个值就切到 gVisor（文档 §12.2）——
+      // —— 隔离后端：改这一个值就切到 gVisor ——
       Runtime: sandboxRuntime,
 
       // —— 生命周期 ——
@@ -80,9 +79,8 @@ export function buildContainerSpec(
 }
 
 /**
- * 池化常驻容器规格（文档 §10.2）：参数同 buildContainerSpec，仅去掉 Binds，
- * /workspace 改为 tmpfs——常驻容器无法为每个任务换 bind mount，
- * 任务文件经 putArchive 注入（docker cp 等价物），每个任务开始前清空。
+ * 池化常驻容器规格：参数同 buildContainerSpec，仅去掉 Binds，/workspace 改为 tmpfs
+ * ——常驻容器无法为每个任务换 bind mount，源码改经 argv/stdin 注入（见 pool.ts）。
  */
 export function buildWarmSpec(profile: LangProfile): Dockerode.ContainerCreateOptions {
   const spec = baseSpec(profile, ['sleep', 'infinity']);   // 常驻而不退出

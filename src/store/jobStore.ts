@@ -1,12 +1,12 @@
 /**
  * @module store/jobStore
- * job 状态读写（文档 §9.1）。
+ * job 状态读写。
  *
  * Redis key 设计：
- *   - job:{jobId}          String(JSON)，终态结果对象，TTL 600s（§5.1 ④）
+ *   - job:{jobId}          String(JSON)，终态结果对象，TTL 600s
  *   - job:{jobId}:status   String，queued / running / finished / failed，供轮询快速命中
  *
- * 刻意不引入 cancelled 等额外状态（§9.2）：多方写同一 job 时状态越多一致性越难保证。
+ * 刻意不引入 cancelled 等额外状态：多方写同一 job 时状态越多一致性越难保证。
  */
 import { redisConnection } from '../queue/connection.js';
 import { limits } from '../config.js';
@@ -14,7 +14,7 @@ import type { Verdict } from '../runner/verdict.js';
 
 export type JobStatus = 'queued' | 'running' | 'finished' | 'failed';
 
-/** 终态对象，字段与文档 §4.2 契约一一对应 */
+/** 终态对象：每个字段都有明确的判定来源 */
 export interface JobResult {
   jobId: string;
   status: 'finished' | 'failed';

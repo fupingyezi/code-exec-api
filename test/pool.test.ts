@@ -1,6 +1,6 @@
 /**
  * @module test/pool
- * 容器池测试（文档 §10.3 三个新问题）——SANDBOX_POOL=1 时运行：
+ * 容器池测试——SANDBOX_POOL=1 时运行：
  *   SANDBOX_POOL=1 npx vitest run
  * 池化把「任务之间天然隔离」变成了「必须主动清理」，这些用例就是验收。
  */
@@ -58,7 +58,7 @@ describe.skipIf(!poolEnabled)('容器池（SANDBOX_POOL=1）', () => {
   test('池 · 内存炸弹 → MLE，脏容器被重建', async () => {
     const r = await run('node', 'const a=[]; while(1) a.push(Buffer.alloc(1<<20))');
     // gVisor（runsc）实测降级：OOM 进程无 OOMKilled 标记，兜底计时器接管 → 判 TLE
-    //（§12.3 兼容性差异，见 docs/gvisor-对比.md）
+    //（兼容性差异，见 docs/gvisor-对比.md）
     expect(judgeRun(r[0]!)).toBe(sandboxRuntime === 'runsc' ? 'TLE' : 'MLE');
     const next = await run('node', "console.log('after mle')");
     expect(judgeRun(next[0]!)).toBe('AC');
@@ -69,15 +69,15 @@ describe.skipIf(!poolEnabled)('容器池（SANDBOX_POOL=1）', () => {
     expect(judgeRun(r[0]!)).toBe('OLE');
   }, 60_000);
 
-  // §10.3 文件残留：任务 A 的编译产物/文件不得被任务 B 看到
-  test('池 · 工作区不跨任务残留（§10.3）', async () => {
+  // 文件残留：任务 A 的编译产物/文件不得被任务 B 看到
+  test('池 · 工作区不跨任务残留', async () => {
     await runCpp('int main(){ return 0; }');
     const b = await run('node', "console.log(require('fs').existsSync('/workspace/main') ? 'LEAK' : 'clean')");
     expect(b[0]!.stdout).toContain('clean');
   }, 60_000);
 
-  // §10.3 进程残留：任务 A fork 的后台进程不得活到任务 B
-  test('池 · 后台进程不跨任务存活（§10.3）', async () => {
+  // 进程残留：任务 A fork 的后台进程不得活到任务 B
+  test('池 · 后台进程不跨任务存活', async () => {
     await run('node', "require('child_process').spawn('node',['-e','setInterval(()=>{},100)']); console.log('spawned')");
     const c = await run(
       'node',
@@ -87,7 +87,7 @@ describe.skipIf(!poolEnabled)('容器池（SANDBOX_POOL=1）', () => {
     expect(c[0]!.stdout).toContain('NODE_COUNT:1');
   }, 60_000);
 
-  // 复用上限：超过 limits.maxReuse 的容器必须被销毁重建（§10.3 逃逸窗口）
+  // 复用上限：超过 limits.maxReuse 的容器必须被销毁重建（限制逃逸窗口）
   test('池 · 复用达到上限后销毁重建', async () => {
     const before = containerPool.idleCount(profiles.node.image);
     for (let i = 0; i < limits.maxReuse; i++) {

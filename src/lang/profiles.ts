@@ -1,7 +1,7 @@
 /**
  * @module lang/profiles
  * 语言画像：描述每种受支持语言「如何执行」。
- * 文档 §3：加一门新语言 = 加一条 profile + 一个 Dockerfile，不动 runner/ 下任何一行。
+ * 加一门新语言 = 加一条 profile + 一个 Dockerfile，不动 runner/ 下任何一行。
  */
 import { CONTAINER_DIR } from '../config.js';
 
@@ -15,7 +15,7 @@ export interface LangProfile {
   compile?: (dir: string) => string[];
   /** 运行命令；dir 为容器内目录 */
   run: (dir: string) => string[];
-  /** 池化路径的编译命令：源码经 stdin 注入（文档 §10 实现说明见 pool.ts） */
+  /** 池化路径的编译命令：源码经 stdin 注入（实现说明见 pool.ts） */
   compileInline?: (source: string) => string[];
   /** 池化路径的运行命令：源码经 argv 注入 */
   runInline: (source: string) => string[];
@@ -34,7 +34,7 @@ export const profiles: Record<LangProfile['id'], LangProfile> = {
     id: 'python',
     image: 'sandbox-python:latest',
     sourceFile: 'main.py',
-    // -I：隔离模式，忽略 PYTHONPATH / PYTHONSTARTUP 等环境变量注入（文档 §6.3 纪律3）
+    // -I：隔离模式，忽略 PYTHONPATH / PYTHONSTARTUP 等环境变量注入
     run: (dir) => ['python3', '-I', `${dir}/main.py`],
     runInline: (source) => ['python3', '-I', '-c', source],
   },

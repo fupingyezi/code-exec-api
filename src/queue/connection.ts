@@ -5,8 +5,8 @@
  * 关键点：
  *   - BullMQ 要求连接参数 maxRetriesPerRequest: null，
  *     否则 worker 会在长时间任务中断连报错
- *   - 单例导出，供 queue.ts / worker.ts / jobStore.ts 共用
- *     （BullMQ 的 Queue/Worker 可共享同一 connection 对象）
+ *   - 单例导出，供 jobStore 等直接使用；BullMQ 的 Queue/Worker/QueueEvents
+ *     用 duplicate() 各自持有独立连接（Worker 的阻塞命令会堵住共享连接）
  *   - 地址来自 config.ts，不在本文件硬编码
  */
 import { Redis } from "ioredis";

@@ -1,6 +1,6 @@
 /**
  * @module runner/capture
- * 带上限的输出采集器（文档 §7.3）。
+ * 带上限的输出采集器。
  * stdout 是不可信长度的数据源，budget 由 stdout + stderr 共享——
  * 分别限制的话，攻击者可以两边各写一份来翻倍占用。
  */
@@ -16,7 +16,7 @@ export interface Capture {
 
 export function createCapture(
   budget: number,
-  /** 每个原始块到达时的回调，SSE 分块输出用（文档 §4.3；§7.3 原版无此参数） */
+  /** 每个原始块到达时的回调，SSE 分块输出用 */
   onChunk?: (kind: 'stdout' | 'stderr', text: string) => void,
 ): Capture {
   const outChunks: Buffer[] = [];
@@ -32,7 +32,7 @@ export function createCapture(
           const slice = chunk.subarray(0, budget - used);
           chunks.push(slice);
           used += slice.length;
-          // 部分写入也发生过截断（文档原版漏了这一支，与 §4.2 语义不符，已修正）
+          // 部分写入也算发生过截断（「只要触发过就是 true」的语义）
           if (slice.length < chunk.length) cut = true;
         } else {
           cut = true;

@@ -1,7 +1,7 @@
 /**
  * @module runner/pool
- * 容器池（文档 §10，阶段四）。
- * 心智模型（§10.3）：物理容器复用，语义状态不复用——
+ * 容器池。
+ * 心智模型：物理容器复用，语义状态不复用——
  * 每个任务仍是独占工作区（/workspace tmpfs 每任务清空）、独占执行配额。
  * 池化和「每任务一个容器」不冲突；做不到语义复用就退回冷路径（SANDBOX_POOL 默认关）。
  */
@@ -17,7 +17,7 @@ const docker = new Docker({ socketPath: dockerSocketPath });
 interface Warm {
   container: Docker.Container;
   image: string;
-  /** 已服务任务数；超过 limits.maxReuse 销毁重建（§10.3 逃逸横向扩散对策） */
+  /** 已服务任务数；超过 limits.maxReuse 销毁重建（限制一次逃逸的存活窗口） */
   used: number;
 }
 
@@ -41,7 +41,7 @@ async function execCmd(container: Docker.Container, cmd: string[], timeoutMs: nu
   }
 }
 
-/** 杀掉容器内除 PID 1 外的所有残留进程（§10.3 进程残留）。
+/** 杀掉容器内除 PID 1 外的所有残留进程。
  *  不能用 pkill -u 65534：PID 1（sleep infinity）也是 65534，会被一起杀掉。
  *  以 nobody 身份执行，kill 其他 uid 的进程会 EPERM（天然被权限挡下）。 */
 const RESIDUE_KILL_CMD = [
@@ -80,7 +80,7 @@ export class ContainerPool {
       const list = this.idle.get(image) ?? [];
       const warm = list.pop();
       if (warm) return warm;
-      // 池空了：等待归还，而不是新建——新建就等于放弃池化（文档 §10.2）
+      // 池空了：等待归还，而不是新建——新建就等于放弃池化
       await new Promise<void>((resolve) => {
         const w = this.waiters.get(image) ?? [];
         w.push(resolve);
@@ -189,12 +189,12 @@ async function executeInWarm(
  * 池化执行一个完整任务：租借容器 → 清工作区 → 逐轮执行 → 收残留 → 归还。
  * 编译轮与运行轮在同一个容器里跑（运行轮要看到编译产物）。
  *
- * ★ 源码注入方式（实测修正，文档 §10 未指定实现）：
+ * ★ 源码注入方式（实测修正）：
  * putArchive（docker cp）在 ReadonlyRootfs=true 的容器上被 daemon 整体拒绝
  *（"container rootfs is marked read-only"，tmpfs 挂载点同样被拒），
  * 因此改为无文件通道：解释型语言源码走 argv（node -e / python3 -c），
  * 编译型语言源码走 exec stdin（g++ -x c++ -）。代价是源码在 ps 里短暂可见——
- * 但池化容器同一时刻只服务一个任务 + 每次任务后残留进程被清理（见 ④），风险可控。
+ * 但池化容器同一时刻只服务一个任务 + 每次任务后残留进程被清理，风险可控。
  *
  * 返回每轮结果；任何异常/超时/OOM 都会把容器标记为脏并销毁重建。
  */
@@ -210,7 +210,7 @@ export async function executePooledJob(
   let dirty = false;
 
   try {
-    // ① 清空上一个任务的工作区残留（§10.3 文件残留；cpp 的编译产物也在这）
+    // ① 清空上一个任务的工作区残留（cpp 的编译产物也在这）
     await execCmd(warm.container, ['sh', '-c', `rm -f ${CONTAINER_DIR}/*`], 5_000);
 
     // ② 逐轮执行
@@ -226,7 +226,7 @@ export async function executePooledJob(
     dirty = true;   // 任何异常都视为脏容器，销毁重建，宁可冷启动不赌安全
     throw err;
   } finally {
-    // ③ 收掉残留后台进程（§10.3 进程残留）。脏容器直接销毁，无需收
+    // ③ 收掉残留后台进程。脏容器直接销毁，无需收
     if (!dirty) {
       await execCmd(warm.container, RESIDUE_KILL_CMD, 2_000).catch(() => {});
     }

@@ -1,6 +1,6 @@
 /**
  * @module index
- * 进程入口（文档 §3）：启动 Worker + HTTP API。
+ * 进程入口：启动 Worker + HTTP API。
  * 本文件只做「启动」，不承载业务逻辑。
  */
 import { startServer } from './api/server.js';

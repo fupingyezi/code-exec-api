@@ -1,6 +1,6 @@
 /**
  * @module runner/execute
- * 容器执行：attach + start + 兜底超时 + 输出采集（文档 §7.2）。
+ * 容器执行：attach + start + 兜底超时 + 输出采集。
  */
 import Docker from 'dockerode';
 import { limits, dockerSocketPath } from '../config.js';
@@ -28,7 +28,7 @@ export async function executeInSandbox(
   stdin: string,
   cmdOverride?: string[],
   wallMs: number = limits.wallMs,
-  /** 输出分块回调（SSE 流式推送用，文档 §4.3） */
+  /** 输出分块回调（SSE 流式推送用） */
   onOutput?: (kind: 'stdout' | 'stderr', text: string) => void,
 ): Promise<ExecResult> {
   const started = Date.now();
@@ -39,7 +39,7 @@ export async function executeInSandbox(
   const capture = createCapture(limits.outputBytes, onOutput);
 
   try {
-    // ★ 顺序：先 attach，再 start（文档 §5 图2 注）。
+    // ★ 顺序：先 attach，再 start。
     // 反过来时，启动很快的程序会在 attach 完成前写完输出，stdout 拿到空 ——
     // 只在快程序 + 小概率时序下复现，最难排查的一类 bug。
     const stream = await container.attach({
@@ -53,7 +53,8 @@ export async function executeInSandbox(
     // （StdinOnce 只保证端到端关闭，不会替我们把流关掉）
     stream.end(stdin);
 
-    // ★ 兜底计时器：唯一不能被恶意代码绕过的时间限制（文档 §7.1）
+    // ★ 兜底计时器：唯一不能被恶意代码绕过的时间限制
+    // （CPU 时间超时可被 sleep/多线程绕过，程序内超时更是用户代码自己写的）
     let timedOut = false;
     const hardKill = setTimeout(() => {
       timedOut = true;
@@ -71,7 +72,7 @@ export async function executeInSandbox(
       clearTimeout(hardKill);   // 正常结束必须清掉，否则计时器持有引用导致泄漏
     }
 
-    // inspect 必须赶在 remove 之前：OOMKilled 是区分 TLE/MLE 的唯一依据（§4.2）
+    // inspect 必须赶在 remove 之前：OOMKilled 是区分 TLE/MLE 的唯一依据
     const info = await container.inspect();
 
     return {
@@ -84,9 +85,8 @@ export async function executeInSandbox(
       truncated: capture.truncated(),
     };
   } finally {
-    // 对文档 §7.2 的一处补强：异常路径也强制回收容器，避免泄漏
-    // （文档原版 remove 在正常路径末尾，attach/start 抛错时容器会残留）。
-    // 移除失败重试并记日志——静默吞掉会让容器无声泄漏（隔离自测用例 10 会抓住它）
+    // 异常路径也强制回收容器，避免泄漏（attach/start 抛错时容器会残留）。
+    // 移除失败重试并记日志——静默吞掉会让容器无声泄漏（隔离自测会抓住它）
     let removed = false;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {

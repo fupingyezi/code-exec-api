@@ -3,7 +3,7 @@
 FROM gcc:12
 
 # 基础镜像已自带 nogroup/nobody(65534)，直接以该身份运行。
-# （文档原版 groupadd/useradd 会因 GID 65534 已被占用而构建失败，实测修正）
+# （groupadd/useradd 创建 65534 会因 GID 已被占用而构建失败，实测修正）
 
 WORKDIR /workspace
 USER 65534:65534

@@ -3,13 +3,13 @@
 services:
   redis:
     image: redis:7-alpine
-    # 判题队列不需要持久化（文档附录 C）
+    # 判题队列不需要持久化
     command: redis-server --save '' --appendonly no
     ports:
       # 宿主 6379 被其他项目占用，默认改挂 6380；可用 REDIS_HOST_PORT 覆盖
       - "${REDIS_HOST_PORT:-6380}:6379"
 
-  # 文档附录 C 的 api 服务（API + Worker 同进程）
+  # api 服务（API + Worker 同进程）
   # ⚠ 注意：本机 colima 环境请继续用 npm run dev（见 README「容器化部署」一节），
   # 此编排面向 Linux / Docker Desktop（它们共享宿主的 /tmp 与 /var/run/docker.sock）
   api:
@@ -18,13 +18,13 @@ services:
       - "3000:3000"
     environment:
       REDIS_URL: redis://redis:6379
-      SANDBOX_RUNTIME: runc          # 改成 runsc 即启用 gVisor（文档 §12.2）
+      SANDBOX_RUNTIME: runc          # 改成 runsc 即启用 gVisor
       JOBS_DIR: /tmp/code-exec       # 容器内任务临时目录（与下方卷对应）
       DOCKER_SOCKET: /var/run/docker.sock
     volumes:
-      # ⚠ 见到这两行请停下来想清楚（文档附录 C 原话）：
+      # ⚠ 见到这两行请停下来想清楚：
       # 挂载 docker.sock 等价于把这个容器变成宿主 root。
-      # 学习项目可以接受；生产环境应把 Worker 拆到独立机器（§13）。
+      # 学习项目可以接受；生产环境应把 Worker 拆到独立机器。
       - "${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"
       - "${JOBS_HOST_DIR:-/tmp/code-exec}:/tmp/code-exec"
     depends_on:

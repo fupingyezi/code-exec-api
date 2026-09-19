@@ -1,6 +1,6 @@
 /**
  * @module api/routes
- * HTTP 路由层（文档 §4 接口契约）：只做协议转换，不做业务逻辑。
+ * HTTP 路由层：只做协议转换，不做业务逻辑。
  * 端点：POST /run · GET /jobs/:id · GET /jobs/:id/events(SSE)
  */
 import { Router, type Response } from 'express';
@@ -13,7 +13,7 @@ import { limits, queueName } from '../config.js';
 
 export const router = Router();
 
-// —— SSE 事件分发（文档 §4.3）——
+// —— SSE 事件分发 ——
 // QueueEvents 是 BullMQ 的发布/订阅事件流：Worker 侧任何状态变化都会广播过来
 const queueEvents = new QueueEvents(queueName, { connection: redisConnection.duplicate() });
 const sseClients = new Map<string, Set<Response>>();
@@ -45,13 +45,8 @@ queueEvents.on('progress', ({ jobId, data }) => broadcast(jobId, 'stdout', data)
 queueEvents.on('completed', ({ jobId }) => void finishSse(jobId));
 queueEvents.on('failed', ({ jobId }) => void finishSse(jobId));
 
-/** 测试与优雅退出用：关闭事件订阅连接 */
-export async function closeApiResources(): Promise<void> {
-  await queueEvents.close();
-}
-
-// —— 限流（文档 §9.1 rate:{callerId} / §4.4 429）——
-// 文档 §2 说令牌桶；此处用固定窗口计数近似（INCR + 首次设 TTL），学习项目足够
+// —— 限流（rate:{callerId}）——
+// 令牌桶用固定窗口计数近似（INCR + 首次设 TTL），学习项目足够
 async function checkRateLimit(callerId: string): Promise<boolean> {
   const key = `rate:${callerId}`;
   const count = await redisConnection.incr(key);
@@ -59,7 +54,7 @@ async function checkRateLimit(callerId: string): Promise<boolean> {
   return count <= limits.rateMaxRequests;
 }
 
-// —— POST /run（文档 §4.1）——
+// —— POST /run ——
 router.post('/run', async (req, res) => {
   const parsed = runRequestSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -74,14 +69,14 @@ router.post('/run', async (req, res) => {
     });
   }
 
-  // §4.4：令牌桶耗尽 → 429 退避重试
+  // 令牌桶耗尽 → 429 退避重试
   if (!(await checkRateLimit(req.ip ?? 'unknown'))) {
     return res.status(429).json({
       error: { code: 'RATE_LIMITED', message: '请求过于频繁，请退避重试' },
     });
   }
 
-  // §4.4：QUEUE_SATURATED——最重要的自我保护机制。
+  // QUEUE_SATURATED——最重要的自我保护机制。
   // 队列不设上限的后果：攻击者提交百万任务，宿主持续满负载且全在服务他一个人
   if ((await jobQueue.getWaitingCount()) >= limits.maxQueueLength) {
     return res.status(503).json({
@@ -101,7 +96,7 @@ router.post('/run', async (req, res) => {
   });
 });
 
-// —— GET /jobs/:id（文档 §4.2）——
+// —— GET /jobs/:id ——
 router.get('/jobs/:id', async (req, res) => {
   const jobId = req.params.id ?? '';
   const status = await getJobStatus(jobId);
@@ -115,7 +110,7 @@ router.get('/jobs/:id', async (req, res) => {
   return res.json({ jobId, status });             // 轮询中间态
 });
 
-// —— GET /jobs/:id/events（文档 §4.3 SSE）——
+// —— GET /jobs/:id/events（SSE）——
 router.get('/jobs/:id/events', async (req, res) => {
   const jobId = req.params.id ?? '';
   const status = await getJobStatus(jobId);
@@ -129,7 +124,7 @@ router.get('/jobs/:id/events', async (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
-    // §4.3 警告框：代理默认缓冲会让 SSE 变成「执行完才一次性收到」
+    // 代理默认缓冲会让 SSE 变成「执行完才一次性收到」，必须显式关闭
     'X-Accel-Buffering': 'no',
   });
   res.write(': keep-alive\n\n');
@@ -140,7 +135,7 @@ router.get('/jobs/:id/events', async (req, res) => {
 
   sseEvent(res, 'status', { status });
 
-  // 心跳注释行：防长任务被中间层断开（§4.3）
+  // 心跳注释行：防长任务被中间层断开
   const heartbeat = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
   req.on('close', () => {
     clearInterval(heartbeat);
@@ -150,3 +145,8 @@ router.get('/jobs/:id/events', async (req, res) => {
   // 竞态兜底：注册期间任务可能恰好完成（completed 事件已错过），补查一次
   if ((await getJobResult(jobId)) !== null) await finishSse(jobId);
 });
+
+/** 测试与优雅退出用：关闭事件订阅连接 */
+export async function closeApiResources(): Promise<void> {
+  await queueEvents.close();
+}
